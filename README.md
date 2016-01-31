@@ -18,6 +18,7 @@ IsoTopeFit.py needs the files
 - TwH5Dll.dll (provided by TOFWERK AG)
 - TwToolDll.dll (provided by TOFWERK AG)
 - TwH5.py
+- TwTool.py
 - TofDaq.py
 - more to come...
 in the same directory.

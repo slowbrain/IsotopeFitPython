@@ -15,8 +15,15 @@ def parseFormula(mol):
     i = 0
     l = len(mol)
     elements = {}
+    charge = '-1'
     while i<l:
-        if mol[i] in string.ascii_uppercase: #i is uppercase?
+        if mol[i] in string.digits: # i is digit? -> charge
+            startpos = i
+            i = i+1
+            while i<l and (mol[i] in string.digits):
+                i = i+1
+            charge = mol[startpos:i]
+        elif mol[i] in string.ascii_uppercase: #i is uppercase?
             startpos = i
             i = i+1
             while i<l and (mol[i] in string.ascii_lowercase):
@@ -57,7 +64,7 @@ def parseFormula(mol):
             else:
                 n = int(mol[startpos:i])
             #print(n)
-            temp = parseFormula(molName)
+            temp, notused = parseFormula(molName)
             #compare temp with elements
             for temp1 in temp.keys():
                 if temp1 in elements.keys():
@@ -77,7 +84,7 @@ def parseFormula(mol):
                 n = 1
             else:
                 n = int(mol[startpos:i])
-            temp = parseFormula(molName)
+            temp, notused = parseFormula(molName)
             #compare temp with elements
             for temp1 in temp.keys():
                 if temp1 in elements.keys():
@@ -87,11 +94,11 @@ def parseFormula(mol):
                     valTemp = temp[temp1]
                     elements[temp1] = valTemp * n                    
     #print(elements)
-    return elements
+    return elements, charge
 
-def oneString(elements):
+def oneString(elements,charge):
     #print elements as one string
-    oneStr=''
+    oneStr=charge
     for atom in sorted(elements):
         oneStr = oneStr+atom+str(elements[atom])
     return oneStr

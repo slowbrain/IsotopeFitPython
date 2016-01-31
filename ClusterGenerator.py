@@ -3,6 +3,7 @@
 # Universitaet Innsbruck
 
 from tkinter import ttk
+from tkinter import filedialog
 import tkinter as tk
 import ITFTree
 import ITFClusterLib
@@ -17,17 +18,21 @@ from collections import defaultdict
 # ----------------------------------------
 class IFC():
     def __init__(self):
-        self.molecule = {'dist':[], 'name':[]}
-        self.names = []
+        self.output = {'dist':[], 'name':[], 'node':[]}
+        #self.names = []
 
-    def addMolecule(self,dist,name):
-        self.molecule['dist'].append(dist.tolist())
-        self.molecule['name'].append(name)
-        self.names.append(name)
+    def addDist(self,dist,name):
+        self.output['dist'].append(dist.tolist())
+        self.output['name'].append(name)
+        #self.names.append(name)
+
+    def addNode(self,iidNode,iidParent,index,text):
+        self.output['node'].append({'iid':iidNode,'iidParent':iidParent,
+            'index':index,'text':text})
 
     def save(self,filename):
         file = open(filename, mode='w')
-        json.dump(self.molecule,file)
+        json.dump(self.output,file)
         file.close()
 
 # ----------------------------------------
@@ -131,9 +136,6 @@ class CGFrame(tk.Tk):
         self.mindist=CGEntries(self,'Mass accuracy','v',8,1,'1e-2')
         # TreeView
         self.clusterTree = ITFTree.Tree(self,'Cluster',1,3,8)
-        self.addTree=ttk.Button(self, text='Add --> Tree',
-            command=self.addToTree)
-        self.addTree.grid(column=1, row=9, sticky=tk.W+tk.E)
         
     def genFolInput(self):
         Clusters, numClusters = self.genInputCommon()
@@ -172,7 +174,7 @@ class CGFrame(tk.Tk):
             defaultextension='.ifc',title='Save cluster data',
             filetypes=[('IsotopeFit cluster data','*.ifc')],
             initialfile='cluster.ifc')
-        ifcFilename = tk.filedialog.asksaveasfilename(**selectFileOptions)
+        ifcFilename = filedialog.asksaveasfilename(**selectFileOptions)
         if ifcFilename == '': # Cancel is clicked
             return
         # Loading of existing IFC-file omitted as file was deleted
@@ -197,7 +199,7 @@ class CGFrame(tk.Tk):
             #multiply charged ions: divide masses by charge
             dCombi[:,0] = dCombi[:,0]/float(self.charge.wert.get())
             # speichern in IFC
-            dataIFC.addMolecule(dCombi,molname)
+            dataIFC.addDist(dCombi,molname)
         # speichern der IFC Datei
         dataIFC.save(ifcFilename)
         print('Done')
@@ -232,19 +234,38 @@ class CGFrame(tk.Tk):
 
     def saveIFC(self):
         print('Generating from Tree')
-        mmd = float(self.mindist.wert.get())
-        th = float(self.thresh.wert.get())
+        self.dataIFC = IFC()
+        temp = self.clusterTree.baum.item('Cluster','text')
+        self.dataIFC.addNode('Cluster','',0,temp)
         self.nodes = defaultdict(list) # dictionary, key=iid of node
+        temp = temp.split('{')
+        th = float(temp[1].strip('}'))
+        mmd = float(temp[2].strip('}'))
         self.goThroughNodes(mmd,th)
         self.combinedClusters = defaultdict(list) # dictionary, key=sumFormula, value = distribution
         self.combineClusters()
-        print(self.combinedClusters)
+        #print(self.combinedClusters)
+        # define options for selecting IFC-File
+        # initial directory is folder displayed on screen
+        selectFileOptions = dict(initialdir=self.ordner.wert.get(),
+            defaultextension='.ifc',title='Save cluster data',
+            filetypes=[('IsotopeFit cluster data','*.ifc')],
+            initialfile='tree.ifc')
+        ifcFilename = filedialog.asksaveasfilename(**selectFileOptions)
+        if ifcFilename == '': # Cancel is clicked
+            return
+        # speichern der IFC Datei
+        self.dataIFC.save(ifcFilename)
+        print('Done')
 
     def goThroughNodes(self,mmd,th,node='Cluster'):
         root = self.clusterTree.root
         for child in self.clusterTree.baum.get_children(node): # child is an iid
             parent = self.clusterTree.baum.parent(child)
+            index = self.clusterTree.baum.index(child)
             temp = self.clusterTree.baum.item(child,'text')
+            #add to IFC
+            self.dataIFC.addNode(child,parent,index,temp)
             temp = temp.split('{')
             sumFormula = temp[0]
             cSize = temp[1].strip('}')
@@ -262,9 +283,9 @@ class CGFrame(tk.Tk):
         if self.clusterTree.baum.get_children(node) == ():
             #am Ende eines Astes
             #print(startwert)
-            elements = ITFClusterLib.parseFormula(startwert)
+            elements, charge = ITFClusterLib.parseFormula(startwert)
             #print(elements)
-            oneString = ITFClusterLib.oneString(elements)
+            oneString = ITFClusterLib.oneString(elements, charge)
             #print(oneString)
             if oneString in self.combinedClusters.keys():
                 print('Cluster already in list')
@@ -272,11 +293,18 @@ class CGFrame(tk.Tk):
                 #create cluster
                 knoten = self.nodes[node]
                 temp = knoten.createClusters(elements)
+                #multiply charged ions: divide masses by charge
+                temp[:,0] = temp[:,0]/float(charge)
                 self.combinedClusters[oneString] = temp
+                # speichern in IFC
+                self.dataIFC.addDist(temp,oneString)
             return
         for child in self.clusterTree.baum.get_children(node):
             knoten = self.nodes[child]
-            #startwert = 
+            if node == 'Cluster': #äusserster Knoten
+                temp = self.clusterTree.baum.item(child,'text')
+                temp = temp.split('{')
+                startwert = temp[3].strip('}')
             for j in knoten.elements:
                 #print(j)
                 if j > 1:
@@ -286,15 +314,6 @@ class CGFrame(tk.Tk):
                     self.combineClusters(startwert+'['+knoten.sumFormula+']',child)
                 else:
                     self.combineClusters(startwert,child)
-        
-
-    def addToTree(self):
-        #print(self.addTree.cget('text'))
-        if self.addTree.cget('text') == 'Update Node':
-            self.clusterTree.updateNode(self)
-        else:
-            self.clusterTree.addNode(self)
-
 
     # Schließen des Fenster
     def close(self):
