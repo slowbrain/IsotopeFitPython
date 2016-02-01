@@ -81,7 +81,8 @@ class Tree:
         self.clipboard = self.baum.item(self.iidSel,'text')
         
     def pasteNode(self):
-        self.baum.insert(self.iidSel,'end',text=self.clipboard)
+        self.baum.insert(self.iidSel,'end',text=self.clipboard,
+            open=True,tags='cNode')
 
 # ----------------------------------------
 # Eigene Dialogbox
